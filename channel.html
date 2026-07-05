@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>チャンネル - YuzuTube</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/style.css">
+</head>
+<body>
+<div id="header"></div>
+<main id="app"></main>
+<script src="/config.js"></script>
+<script src="/common.js"></script>
+<script>
+bootstrap(async function(){
+  const app = document.getElementById('app');
+  const path = decodeURIComponent(location.pathname);
+  let ident = '';
+  if(path.startsWith('/channel/')) ident = path.slice(9);
+  else if(path.startsWith('/@'))   ident = path.slice(1);
+  else ident = qs('id') || '';
+  if(!ident){ app.innerHTML = `<div class="state">チャンネルが指定されていません</div>`; return; }
+
+  app.innerHTML = spinner('チャンネルを開いています…');
+  let c;
+  try{ c = await api.channel(ident); }
+  catch(e){ app.innerHTML = errorState(()=>location.reload()); return; }
+  document.title = (c.name||'チャンネル') + ' - YuzuTube';
+
+  const subbed = store.isSubbed(c.id);
+  app.innerHTML = `
+    <div class="vmeta" style="margin-bottom:18px">
+      <div class="chan" style="gap:16px">
+        <img class="avatar" style="width:76px;height:76px" src="${c.thumbnail||''}" alt="">
+        <div><div class="nm" style="font-size:24px;font-family:'Space Grotesk'">${esc(c.name||'')}</div>
+        <div class="sub">${c.subscribers?fmtNum(c.subscribers)+' 人が登録':''}</div></div>
+      </div>
+      <button class="subbtn ${subbed?'on':''}" id="subbtn">${subbed?'登録済み':'登録'}</button>
+    </div>
+    <h2 class="sec">動画</h2>
+    ${(c.videos||[]).length ? gridHTML(c.videos) : `<div class="state">動画がありません</div>`}`;
+
+  const subbtn = document.getElementById('subbtn');
+  subbtn.onclick = () => {
+    const on = store.toggleSub({id:c.id, name:c.name, thumbnail:c.thumbnail});
+    subbtn.classList.toggle('on', on);
+    subbtn.textContent = on ? '登録済み' : '登録';
+  };
+});
+</script>
+</body>
+</html>
