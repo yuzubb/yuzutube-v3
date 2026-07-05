@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>コメント - YuzuTube</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/style.css">
+</head>
+<body>
+<div id="header"></div>
+<main id="app"></main>
+<script src="/config.js"></script>
+<script src="/common.js"></script>
+<script>
+bootstrap(async function(){
+  const app = document.getElementById('app');
+  const id = qs('v');
+  if(!id){ app.innerHTML = `<div class="state">動画IDがありません</div>`; return; }
+
+  app.innerHTML = `<a class="linkbtn" href="/watch?v=${id}">動画に戻る</a>
+    <h2 class="sec" id="head">コメント</h2>
+    <div id="clist">${spinner('コメント取得中…')}</div>
+    <button class="more" id="cmore" style="display:none">もっと見る</button>`;
+
+  api.video(id).then(v=>{ if(v.title) document.getElementById('head').textContent = 'コメント ・ ' + v.title; }).catch(()=>{});
+
+  try{
+    const {comments} = await api.comments(id);
+    const list = document.getElementById('clist'), more = document.getElementById('cmore');
+    if(!comments.length){ list.innerHTML = `<div class="state">コメントはありません</div>`; return; }
+    list.innerHTML = ''; let shown = 0; const step = 30;
+    const draw = () => {
+      const slice = comments.slice(shown, shown+step);
+      list.insertAdjacentHTML('beforeend', slice.map(commentHTML).join(''));
+      shown += slice.length;
+      more.style.display = shown < comments.length ? 'block' : 'none';
+    };
+    more.onclick = draw; draw();
+  }catch(e){
+    document.getElementById('clist').innerHTML = errorState(()=>location.reload());
+  }
+});
+</script>
+</body>
+</html>

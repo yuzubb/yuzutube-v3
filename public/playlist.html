@@ -1,0 +1,34 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>プレイリスト - YuzuTube</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/style.css">
+</head>
+<body>
+<div id="header"></div>
+<main id="app"></main>
+<script src="/config.js"></script>
+<script src="/common.js"></script>
+<script>
+bootstrap(async function(){
+  const app = document.getElementById('app');
+  const list = qs('list');
+  if(!list){ app.innerHTML = `<div class="state">プレイリストIDがありません</div>`; return; }
+
+  app.innerHTML = spinner('プレイリストを開いています…');
+  try{
+    const p = await api.playlist(list);
+    document.title = (p.title||'プレイリスト') + ' - YuzuTube';
+    app.innerHTML = `<h1 class="vtitle" style="font-size:24px">${esc(p.title||'プレイリスト')}</h1>
+      <div class="vmeta"><div class="sub">${esc(p.channel||'')} ・ ${p.count||(p.videos||[]).length} 本</div></div>
+      ${(p.videos||[]).length ? gridHTML(p.videos) : `<div class="state">動画がありません</div>`}`;
+  }catch(e){ app.innerHTML = errorState(()=>location.reload()); }
+});
+</script>
+</body>
+</html>

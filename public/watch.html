@@ -1,0 +1,139 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>YuzuTube</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/style.css">
+</head>
+<body>
+<div id="header"></div>
+<main id="app"></main>
+<script src="/config.js"></script>
+<script src="/common.js"></script>
+<script>
+bootstrap(async function(){
+  const app = document.getElementById('app');
+  const id = qs('v');
+  if(!id){ app.innerHTML = `<div class="state">動画IDがありません</div>`; return; }
+
+  app.innerHTML = `<div class="watch"><div>
+    <div class="player sk" style="aspect-ratio:16/9"></div>${spinner('動画情報を取得中…')}
+  </div><div class="side"></div></div>`;
+
+  let v;
+  try{ v = await api.video(id); }
+  catch(e){ app.innerHTML = errorState(()=>location.reload()); return; }
+  document.title = (v.title||'YuzuTube') + ' - YuzuTube';
+  store.addHistory(v);
+
+  const likeIcon = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M7 10v11M2 12h5v9H2zM7 10l4.2-8.2c1.6.1 2.5 1.4 2.2 2.9L12.8 9H20a2 2 0 0 1 2 2.3l-1.2 7A2 2 0 0 1 18.8 20H7"/></svg>`;
+  const subbed = store.isSubbed(v.channelId);
+
+  const qmenu = ['自動', ...v.qualities.map(q=>q.label)];
+  const qmenuHTML = `<div class="qmenu" id="qmenu">` +
+    `<button data-itag="" class="on">自動</button>` +
+    v.qualities.map(q=>`<button data-itag="${q.itag}">${esc(q.label)}</button>`).join('') + `</div>`;
+
+  app.innerHTML = `<div class="watch">
+    <div>
+      <div class="player">
+        <video id="vid" controls autoplay playsinline src="${streamSrc(id)}" poster="${v.thumbnail||''}"></video>
+        ${v.qualities.length ? `<button class="qbtn" id="qbtn">画質</button>${qmenuHTML}` : ''}
+      </div>
+      <h1 class="vtitle">${esc(v.title)}</h1>
+      <div class="vmeta">
+        <a class="chan" href="/channel/${v.channelId||''}">
+          <img class="avatar" src="${v.channelThumbnail||''}" alt="">
+          <div><div class="nm">${esc(v.channel||'')}</div>
+          <div class="sub">${v.subscribers?fmtNum(v.subscribers)+' 人':''}</div></div>
+        </a>
+        <button class="subbtn ${subbed?'on':''}" id="subbtn">${subbed?'登録済み':'登録'}</button>
+        <div class="actions">
+          <div class="pill like">${likeIcon}<b>${fmtNum(v.likes)}</b></div>
+          <button class="pill" id="share">共有</button>
+        </div>
+      </div>
+      <div class="desc" id="desc">
+        <div class="stat">${fmtViews(v.views)}${v.uploadDate?' · '+fmtDate(v.uploadDate):''}</div>
+        <pre>${linkify(v.description||'（概要欄なし）')}</pre>
+        <span class="toggle" id="toggle">もっと見る / 閉じる</span>
+      </div>
+      <h2 class="sec">コメント</h2>
+      <div id="clist">${spinner('コメント取得中…')}</div>
+      <button class="more" id="cmore" style="display:none">もっと見る</button>
+    </div>
+    <div class="side">
+      <h2 class="sec" style="margin-top:0">関連動画</h2>
+      <div id="related">${spinner('探しています…')}</div>
+    </div>
+  </div>`;
+
+  const video = document.getElementById('vid');
+
+  // 画質切替（再生位置と再生状態を維持、再抽出はサーバー側でキャッシュ）
+  const qbtn = document.getElementById('qbtn'), menu = document.getElementById('qmenu');
+  if(qbtn){
+    qbtn.onclick = () => menu.classList.toggle('show');
+    document.addEventListener('click', e=>{ if(!e.target.closest('.player')) menu.classList.remove('show'); });
+    menu.querySelectorAll('button').forEach(b=>{
+      b.onclick = () => {
+        menu.querySelectorAll('button').forEach(x=>x.classList.remove('on'));
+        b.classList.add('on');
+        qbtn.textContent = b.textContent;
+        menu.classList.remove('show');
+        const t = video.currentTime, playing = !video.paused;
+        video.src = streamSrc(id, b.dataset.itag);
+        video.addEventListener('loadedmetadata', ()=>{ try{video.currentTime=t;}catch(_){}; if(playing) video.play(); }, {once:true});
+      };
+    });
+  }
+
+  // 概要トグル
+  document.getElementById('toggle').onclick = () => document.getElementById('desc').classList.toggle('open');
+
+  // 共有
+  document.getElementById('share').onclick = () => {
+    if(navigator.share) navigator.share({title:v.title, url:location.href});
+    else if(navigator.clipboard){ navigator.clipboard.writeText(location.href); document.getElementById('share').textContent='コピー済み'; }
+  };
+
+  // 登録
+  const subbtn = document.getElementById('subbtn');
+  subbtn.onclick = () => {
+    const on = store.toggleSub({id:v.channelId, name:v.channel, thumbnail:v.channelThumbnail});
+    subbtn.classList.toggle('on', on);
+    subbtn.textContent = on ? '登録済み' : '登録';
+  };
+
+  // コメント（取得済み配列を20件ずつ表示）
+  api.comments(id).then(({comments})=>{
+    const list = document.getElementById('clist'), more = document.getElementById('cmore');
+    if(!comments.length){ list.innerHTML = `<div class="state">コメントはありません</div>`; return; }
+    list.innerHTML = ''; let shown = 0; const step = 20;
+    const draw = () => {
+      const slice = comments.slice(shown, shown+step);
+      list.insertAdjacentHTML('beforeend', slice.map(commentHTML).join(''));
+      shown += slice.length;
+      more.style.display = shown < comments.length ? 'block' : 'none';
+    };
+    more.onclick = draw; draw();
+  }).catch(()=>{ document.getElementById('clist').innerHTML = `<div class="state">コメントを取得できませんでした</div>`; });
+
+  // 関連
+  api.related(id).then(({results})=>{
+    document.getElementById('related').innerHTML = results.map(r=>{
+      const d = durText(r);
+      return `<a class="rel" href="/watch?v=${r.id}">
+        <div class="thumb"><img loading="lazy" src="${r.thumbnail||''}" alt="">
+          ${d?`<span class="dur">${d}</span>`:''}</div>
+        <div><h4>${esc(r.title)}</h4><div class="meta">${esc(r.channel||'')}<br>${subText(r)}</div></div>
+      </a>`;}).join('');
+  }).catch(()=>{ document.getElementById('related').innerHTML = `<div class="state">関連なし</div>`; });
+});
+</script>
+</body>
+</html>

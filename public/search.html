@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>検索 - YuzuTube</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/style.css">
+</head>
+<body>
+<div id="header"></div>
+<main id="app"></main>
+<script src="/config.js"></script>
+<script src="/common.js"></script>
+<script>
+bootstrap(async function(){
+  const app = document.getElementById('app');
+  const q = qs('search_query') || '';
+  if(!q){ app.innerHTML = `<div class="state">検索ワードを入力してください</div>`; return; }
+  document.title = `${q} - YuzuTube`;
+  app.innerHTML = `<div class="rowhead">「${esc(q)}」の検索結果</div><div id="grid">${skeletonGrid()}</div>`;
+
+  const grid = document.getElementById('grid');
+  let cont = null, first = true;
+  async function load(){
+    try{
+      const data = await api.search(q, cont);
+      if(first){
+        grid.innerHTML = data.results.length ? gridHTML(data.results) : `<div class="state">結果がありませんでした</div>`;
+        first = false;
+      } else grid.insertAdjacentHTML('beforeend', data.results.map(videoCardHTML).join(''));
+      cont = data.continuation;
+      return !!cont;
+    }catch(e){
+      if(first){ grid.innerHTML = errorState(()=>{ first=true; cont=null; load(); }); }
+      return false;
+    }
+  }
+  await load();
+  infiniteScroll(grid, load);
+});
+</script>
+</body>
+</html>
